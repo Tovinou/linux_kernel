@@ -1,0 +1,38 @@
+# Kernel module build artifacts
+*.o
+*.ko
+*.mod.c
+*.mod.o
+*.cmd
+*.tmp_versions
+Module.symvers
+modules.order
+
+# Build directories
+/tmp_versions/
+/.tmp_versions/
+
+# Compiled test program
+/test
+/test_1
+/test_*
+
+# Editor temporary files
+*~
+*.swp
+*.swo
+*.bak
+
+# VS Code settings (optional)
+.vscode/
+!.vscode/tasks.json  # if you want to keep custom build tasks
+!.vscode/launch.json
+
+# Clangd / LSP cache
+.cache/
+compile_commands.json
+
+# IDE project files
+.idea/
+*.user
+*.useros
