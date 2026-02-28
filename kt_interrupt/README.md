@@ -1,139 +1,104 @@
-# Character Device Driver with Interrupt Simulation
+Character Device Driver with Interrupt Simulation
+A Linux kernel module project demonstrating the implementation of a character device (/dev/kt_interrupt) using core kernel synchronization and scheduling primitives.
 
-This project implements a Linux kernel module that creates a character device `/dev/kt_interrupt`. It demonstrates core kernel concepts: file operations, mutex locking, wait queues, and simulated interrupts using a kernel timer.
+Overview
+This project simulates hardware behavior using a kernel timer. It showcases how to manage process blocking and unblocking in kernel space, ensuring data integrity across multiple operations.
 
----
+Key Features
+Dynamic Registration: Automatically assigns a major number and creates a device node.
 
-## Features
+Thread Safety: Uses a mutex to prevent race conditions during buffer access.
 
-- Registers a character device with a dynamic major number.  
-- Implements `open`, `read`, `write`, and `release` operations.  
-- Uses a mutex to protect shared data (buffer).  
-- Employs a wait queue to block reading processes until data is available.  
-- Simulates an interrupt with a kernel timer: after a write, the timer expires after 5 seconds, marking data as ready and waking up any waiting readers.
+Event-Driven Blocking: Implements a wait_queue to put reading processes to sleep until data is ready.
 
----
+Interrupt Simulation: Employs a kernel timer to simulate an asynchronous interrupt 5 seconds after a write operation.
 
-## Project Structure
-
+Project Structure
+Plaintext
 .
 ├── include/
-│   └── kt_device.h          # Header with device structure and function prototypes
+│   └── kt_device.h      # Device structure and function prototypes
 ├── src/
-│   ├── Makefile             # Build file for the kernel module
-│   ├── main.c                # Module init/exit and file_operations definition
-│   ├── kt_fops.c             # Implementation of open, read, write, release
-│   ├── kt_timer.c            # Timer callback function
-│   └── ... (build artifacts)
+│   ├── Makefile         # Kernel build system file
+│   ├── main.c           # Module init/exit and file_operations
+│   ├── kt_fops.c        # Implementation of open, read, write, release
+│   └── kt_timer.c       # Timer callback (The "Interrupt" simulator)
 ├── tests/
-│   ├── test_1.c              # Test program (writes then reads, blocking)
-│   ├── test.c                # Additional test (if any)
-│   └── test_1                # Compiled test binary
-└── README.md                 # This file
+│   ├── test_1.c         # Main test program (Blocking Read/Write)
+│   └── test.c           # Utility tests
+└── README.md            # Project documentation
+Getting Started
+Requirements
+Linux System: Tested on Raspberry Pi OS / Ubuntu.
 
+Kernel Headers: Ensure headers match your running kernel version.
 
----
+Bash
+sudo apt update
+sudo apt install raspberrypi-kernel-headers  # For Raspberry Pi
+# OR
+sudo apt install linux-headers-$(uname -r)   # For Generic Linux
+Building the Module
+Navigate to the project root:
 
-## Requirements
-
-- Raspberry Pi (or any Linux system) with kernel headers installed.  
-- Kernel headers matching your running kernel:
-
-```bash
-sudo apt install raspberrypi-kernel-headers   # on Raspberry Pi OS
-
-## Build tools:
-
-## Building the Module
-
-- Navigate to the project root:
-
+Bash
 cd ~/kt_interrupt
+Compile the module using the provided Makefile:
 
-## Build the module:
+Bash
 make
+The compiled driver kt_interrupt.ko will be generated in the src/ directory.
 
-- The compiled module kt_interrupt.ko will be placed in the src/ directory.
-
-Loading the Module
-
+Usage
+1. Loading the Module
 Insert the module into the kernel:
 
+Bash
 sudo insmod src/kt_interrupt.ko
+Verify the installation by checking the kernel log:
 
-Check kernel messages:
-
+Bash
 dmesg | tail
+# Expected: kt_interrupt: module loaded successfully
+2. Testing the Driver
+Compile and run the user-space test application:
 
-You should see:
-
-kt_interrupt: module loaded successfully
-
-The device file /dev/kt_interrupt should now exist (created automatically via udev).
-
-Testing the Driver
-
-Compile the test program:
-
+Bash
 cd tests
 gcc test_1.c -o test_1
-
-Run the test (may need sudo):
-
 sudo ./test_1
+Expected Behavior:
 
-Expected output:
+The program writes "Hello, interrupt!" to the device.
 
-Written: Hello, interrupt!
-Now reading (will block for ~5 seconds)...
-Read: Hello, interrupt!
+The program attempts to read and immediately blocks.
 
-While the read blocks, you can check dmesg to see the timer expiry message after 5 seconds:
+After 5 seconds, the kernel timer expires (simulating an interrupt).
 
-kt_interrupt: timer expired (simulated interrupt)
-kt_interrupt: read 17 bytes
-Unloading the Module
+The timer wakes up the reading process, and the message is displayed.
 
-Remove the module when done:
-
+3. Unloading the Module
+Bash
 sudo rmmod kt_interrupt
+Technical Details
+Logic Flow
+Write: Data is copied from user-space to a 256-byte internal buffer. A kernel timer is triggered.
 
-Verify cleanup message:
+Read: If the "data ready" flag is false, the process is added to a wait_queue and put to sleep (Interruptible).
 
-dmesg | tail
-kt_interrupt: module unloaded
-Cleaning Up
+Timer Expiry: After 5000ms, the timer callback sets the flag to true and calls wake_up_interruptible().
 
-To remove compiled files:
-
-make clean
-
-This deletes .o, .ko, .mod.*, and other build artifacts from src/.
-
-Notes
-
-Timer delay is hardcoded to 5 seconds. Modify it in kt_fops.c (msecs_to_jiffies(5000)).
-
-Buffer size is 256 bytes – larger writes will be truncated.
-
-The module uses a simple mutex; for multiple readers/writers, additional logic is needed.
+Wake Up: The reading process resumes, copies data to user-space, and clears the buffer.
 
 Troubleshooting
+Class Creation Errors: If using a kernel version > 6.4, the class_create macro changed. Ensure your main.c matches:
 
-Build errors about class_create:
-Newer kernels use the one-argument class_create(). Edit src/main.c:
-
-// old
-kt_class = class_create(THIS_MODULE, "kt_interrupt");
-// new
+C
+// Modern kernels (1 argument)
 kt_class = class_create("kt_interrupt");
+Permissions: If you cannot access the device without sudo, run:
 
-Permission denied on /dev/kt_interrupt:
-
+Bash
 sudo chmod 666 /dev/kt_interrupt
-
-Module not unloading: Ensure no process has the device open:
-
-lsof /dev/kt_interrupt
-fuser -v /dev/kt_interrupt
 License
+This project is licensed under the GPLv2.
